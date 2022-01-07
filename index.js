@@ -22,11 +22,15 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, resp
     return axios.get(url);
   }
   
+  function callApiPut(url) {
+    return axios.put(url, {});
+  }
+  
   function report(agent) {
     return callApi("https://apibot2121.azurewebsites.net/api/buildings/num").then(res => {
         let n = res.data;
-      	let greetings = "Hi,\n";
-      	let elevatorsAndBuildings = "there are currently " + n.numElevators + " elevators deployed in the " + n.numBuildings + " buildings of your " + n.numCustomers + " customers.\n";
+      	let greetings = "Greetings.\n";
+      	let elevatorsAndBuildings = "There are currently " + n.numElevators + " elevators deployed in the " + n.numBuildings + " buildings of your " + n.numCustomers + " customers.\n";
       	let elevatorsBeingServiced = "Currently, " + n.numElevatorsBeingServiced + " elevators are not in running status and are being serviced.\n";
       	let batteriesAndCities =  n.numBatteries + " batteries are deployed across " + n.numCities + " cities.\n";
       	let quotes = "On another note you currently have " + n.numQuotes  + " quotes awaiting processing.\n";
@@ -36,13 +40,54 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, resp
       	agent.add(r);
     });
   }
+  
+  function getCategory() {
+    let string = agent.parameters.object;
+    let result;
+    if (string == "battery") { result = "batteries"; }
+    else if (string == "elevator" || string == "column") { result = string + "s"; }
+    else { result = "invalid"; }
+    return result;
+  }
+  
+  function getObjectStatus(agent) {
+    let category = getCategory();
+    console.log(category);
+    if (category == "invalid") { 
+      agent.add(```
+        The object is not valid.
+        You can only ask for the status of elevators, columns and batteries.
+        For exemple: 'What is the status of elevator #1'
+      ```);
+      return;
+    }
     
-  function elevatorReport(agent) {
-    return callApi("https://apibot2121.azurewebsites.net/api/elevators/" + agent.parameters.elevatorId + "/status").then(res1 => {
-      console.log(res1.data);
-      let r = "The state of elevator #" + agent.parameters.elevatorId + " is: " + res1.data;
-      agent.add(r);
-  	});
+    if ((category !== "invalid")) {
+      return callApi("https://apibot2121.azurewebsites.net/api/" + category + "/" + agent.parameters.id + "/status").then(res1 => {
+        let r = "The status of " + agent.parameters.object + " #" + agent.parameters.id + " is: " + res1.data;
+        agent.add(r);
+      });
+    }
+  }
+  
+  function updateObjectStatus(agent) {
+    let category = getCategory();
+    if (category == "invalid") { 
+      agent.add(```
+        The object is not valid.
+        You can only ask for the status of elevators, columns and batteries.
+        For exemple: 'What is the status of elevator #1'
+      ```);
+      return;
+    }
+    
+    if ((category !== "invalid")) {
+      return callApiPut("https://apibot2121.azurewebsites.net/api/" + category + "/update/" + agent.parameters.id + "/" + agent.parameters.new).then(res1 => {
+        let r = "The state of " + agent.parameters.object.toLowerCase() + " #" + agent.parameters.id + " is now: " + res1.data.status;
+        console.dir(res1);
+        agent.add(r);
+      });
+    }
   }
  
   function fallback(agent) {
@@ -54,7 +99,7 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, resp
   let intentMap = new Map();
   intentMap.set('Default Welcome Intent', report);
   intentMap.set('Default Fallback Intent', fallback);
-  //intentMap.set('Report', report);
-  intentMap.set('Elevator Report', elevatorReport);
+  intentMap.set('Object Get Status', getObjectStatus);
+  intentMap.set('Object Update Status', updateObjectStatus);
   agent.handleRequest(intentMap);
 });
