@@ -26,6 +26,10 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, resp
     return axios.put(url, {});
   }
   
+  function callApiPost(url, data) {
+    return axios.post(url, data);
+  }
+  
   function report(agent) {
     return callApi("https://apibot2121.azurewebsites.net/api/buildings/num").then(res => {
         let n = res.data;
@@ -84,10 +88,34 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, resp
     if ((category !== "invalid")) {
       return callApiPut("https://apibot2121.azurewebsites.net/api/" + category + "/update/" + agent.parameters.id + "/" + agent.parameters.new).then(res1 => {
         let r = "The state of " + agent.parameters.object.toLowerCase() + " #" + agent.parameters.id + " is now: " + res1.data.status;
-        console.dir(res1);
+        console.log(r);
         agent.add(r);
       });
     }
+  }
+  
+  function createIntervention(agent) {
+    var params =
+    {
+      "customerId": agent.parameters.customer_Id,
+      "buildingId": agent.parameters.building_Id,
+      "batteryId": agent.parameters.battery_Id,
+      "columnId": agent.parameters.column_Id,
+      "elevatorId": agent.parameters.elevator_Id,
+      "report": agent.parameters.report
+    };
+
+    return callApiPost("https://apibot2121.azurewebsites.net/api/interventions/dialogflowCreate", params)
+    .then((newIntervention) => { 
+      if (newIntervention.data == '') { 
+        agent.add('Invalid entry'); 
+      }
+      
+      else {
+        agent.add("Intervention created successfully");
+      }
+    })
+    .catch(function (error) { console.log(error); });
   }
  
   function fallback(agent) {
@@ -101,5 +129,6 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest((request, resp
   intentMap.set('Default Fallback Intent', fallback);
   intentMap.set('Object Get Status', getObjectStatus);
   intentMap.set('Object Update Status', updateObjectStatus);
+  intentMap.set('Create Intervention', createIntervention);
   agent.handleRequest(intentMap);
 });
